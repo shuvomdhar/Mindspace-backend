@@ -2,7 +2,7 @@
   "name": "mindspace-backend",
   "version": "1.0.0",
   "private": true,
-  "description": "REST API for Mindspace — notes, tasks, kanban board and activity log.",
+  "description": "REST API for Mindspace — notes, ideas and kanban board.",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {

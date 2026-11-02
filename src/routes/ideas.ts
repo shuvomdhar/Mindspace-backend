@@ -4,12 +4,12 @@ import { supabaseAdmin } from '../lib/supabase.js';
 import { getUserId, HttpError, parseId } from '../lib/http.js';
 import {
   EMPTY_DOC,
-  TASK_STATUSES,
-  type TaskRow,
-  type TaskStatus,
+  IDEA_STATUSES,
+  type IdeaRow,
+  type IdeaStatus,
 } from '../types.js';
 
-export const tasksRouter = Router();
+export const ideasRouter = Router();
 
 const statusSchema = z.enum([
   'planned',
@@ -30,7 +30,7 @@ const contentSchema = z.unknown().refine(
   { message: 'Rich text content is too large.' },
 );
 
-const createTaskSchema = z.object({
+const createIdeaSchema = z.object({
   title: z.string().trim().min(1, 'Title is required.').max(200),
   description: contentSchema.optional(),
   descriptionText: z.string().max(200_000).optional(),
@@ -38,7 +38,7 @@ const createTaskSchema = z.object({
   position: z.number().int().min(0).optional(),
 });
 
-const updateTaskSchema = z
+const updateIdeaSchema = z
   .object({
     title: z.string().trim().min(1).max(200).optional(),
     description: contentSchema.optional(),
@@ -50,17 +50,17 @@ const updateTaskSchema = z
     message: 'Nothing to update.',
   });
 
-const moveTaskSchema = z.object({
+const moveIdeaSchema = z.object({
   status: statusSchema,
   position: z.number().int().min(0).optional(),
 });
 
 async function nextPosition(
   userId: string,
-  status: TaskStatus,
+  status: IdeaStatus,
 ): Promise<number> {
   const { data, error } = await supabaseAdmin
-    .from('tasks')
+    .from('ideas')
     .select('position')
     .eq('user_id', userId)
     .eq('status', status)
@@ -72,33 +72,33 @@ async function nextPosition(
   return ((data as { position?: number } | null)?.position ?? 0) + 1;
 }
 
-async function findTask(userId: string, id: number): Promise<TaskRow> {
+async function findIdea(userId: string, id: number): Promise<IdeaRow> {
   const { data, error } = await supabaseAdmin
-    .from('tasks')
+    .from('ideas')
     .select('*')
     .eq('id', id)
     .eq('user_id', userId)
     .maybeSingle();
 
   if (error) throw new HttpError(500, error.message);
-  if (!data) throw new HttpError(404, 'Task not found.');
-  return data as TaskRow;
+  if (!data) throw new HttpError(404, 'Idea not found.');
+  return data as IdeaRow;
 }
 
-/** GET /api/tasks?status=planned — list tasks ordered by board position. */
-tasksRouter.get('/', async (req, res) => {
+/** GET /api/ideas?status=planned — list ideas ordered by board position. */
+ideasRouter.get('/', async (req, res) => {
   const userId = getUserId(req);
   const statusFilter = req.query.status;
 
   let query = supabaseAdmin
-    .from('tasks')
+    .from('ideas')
     .select('*')
     .eq('user_id', userId)
     .order('position', { ascending: true })
     .order('created_at', { ascending: true });
 
   if (typeof statusFilter === 'string' && statusFilter.length > 0) {
-    if (!TASK_STATUSES.includes(statusFilter as TaskStatus)) {
+    if (!IDEA_STATUSES.includes(statusFilter as IdeaStatus)) {
       throw new HttpError(400, 'Invalid status filter.');
     }
     query = query.eq('status', statusFilter);
@@ -107,25 +107,25 @@ tasksRouter.get('/', async (req, res) => {
   const { data, error } = await query;
   if (error) throw new HttpError(500, error.message);
 
-  res.json({ tasks: (data ?? []) as TaskRow[] });
+  res.json({ ideas: (data ?? []) as IdeaRow[] });
 });
 
-/** GET /api/tasks/:id */
-tasksRouter.get('/:id', async (req, res) => {
+/** GET /api/ideas/:id */
+ideasRouter.get('/:id', async (req, res) => {
   const userId = getUserId(req);
   const id = parseId(req.params.id);
-  res.json({ task: await findTask(userId, id) });
+  res.json({ idea: await findIdea(userId, id) });
 });
 
-/** POST /api/tasks */
-tasksRouter.post('/', async (req, res) => {
+/** POST /api/ideas */
+ideasRouter.post('/', async (req, res) => {
   const userId = getUserId(req);
-  const body = createTaskSchema.parse(req.body ?? {});
-  const status: TaskStatus = body.status ?? 'planned';
+  const body = createIdeaSchema.parse(req.body ?? {});
+  const status: IdeaStatus = body.status ?? 'planned';
   const position = body.position ?? (await nextPosition(userId, status));
 
   const { data, error } = await supabaseAdmin
-    .from('tasks')
+    .from('ideas')
     .insert({
       user_id: userId,
       title: body.title,
@@ -139,15 +139,15 @@ tasksRouter.post('/', async (req, res) => {
 
   if (error) throw new HttpError(500, error.message);
 
-  res.status(201).json({ task: data as TaskRow });
+  res.status(201).json({ idea: data as IdeaRow });
 });
 
-/** PATCH /api/tasks/:id — update title, description, status or position. */
-tasksRouter.patch('/:id', async (req, res) => {
+/** PATCH /api/ideas/:id — update title, description, status or position. */
+ideasRouter.patch('/:id', async (req, res) => {
   const userId = getUserId(req);
   const id = parseId(req.params.id);
-  const body = updateTaskSchema.parse(req.body ?? {});
-  const existing = await findTask(userId, id);
+  const body = updateIdeaSchema.parse(req.body ?? {});
+  const existing = await findIdea(userId, id);
 
   const updates: Record<string, unknown> = {};
   if (body.title !== undefined) updates.title = body.title;
@@ -159,16 +159,13 @@ tasksRouter.patch('/:id', async (req, res) => {
 
   if (body.status !== undefined) {
     updates.status = body.status;
-    if (
-      body.status !== existing.status &&
-      body.position === undefined
-    ) {
+    if (body.status !== existing.status && body.position === undefined) {
       updates.position = await nextPosition(userId, body.status);
     }
   }
 
   const { data, error } = await supabaseAdmin
-    .from('tasks')
+    .from('ideas')
     .update(updates)
     .eq('id', id)
     .eq('user_id', userId)
@@ -176,17 +173,17 @@ tasksRouter.patch('/:id', async (req, res) => {
     .maybeSingle();
 
   if (error) throw new HttpError(500, error.message);
-  if (!data) throw new HttpError(404, 'Task not found.');
+  if (!data) throw new HttpError(404, 'Idea not found.');
 
-  res.json({ task: data as TaskRow });
+  res.json({ idea: data as IdeaRow });
 });
 
-/** PATCH /api/tasks/:id/status — used by the kanban drag & drop. */
-tasksRouter.patch('/:id/status', async (req, res) => {
+/** PATCH /api/ideas/:id/status — used by the kanban drag & drop. */
+ideasRouter.patch('/:id/status', async (req, res) => {
   const userId = getUserId(req);
   const id = parseId(req.params.id);
-  const body = moveTaskSchema.parse(req.body ?? {});
-  const existing = await findTask(userId, id);
+  const body = moveIdeaSchema.parse(req.body ?? {});
+  const existing = await findIdea(userId, id);
 
   const position =
     body.position ??
@@ -195,7 +192,7 @@ tasksRouter.patch('/:id/status', async (req, res) => {
       : await nextPosition(userId, body.status));
 
   const { data, error } = await supabaseAdmin
-    .from('tasks')
+    .from('ideas')
     .update({ status: body.status, position })
     .eq('id', id)
     .eq('user_id', userId)
@@ -203,19 +200,19 @@ tasksRouter.patch('/:id/status', async (req, res) => {
     .maybeSingle();
 
   if (error) throw new HttpError(500, error.message);
-  if (!data) throw new HttpError(404, 'Task not found.');
+  if (!data) throw new HttpError(404, 'Idea not found.');
 
-  res.json({ task: data as TaskRow });
+  res.json({ idea: data as IdeaRow });
 });
 
-/** DELETE /api/tasks/:id */
-tasksRouter.delete('/:id', async (req, res) => {
+/** DELETE /api/ideas/:id */
+ideasRouter.delete('/:id', async (req, res) => {
   const userId = getUserId(req);
   const id = parseId(req.params.id);
-  await findTask(userId, id);
+  await findIdea(userId, id);
 
   const { error } = await supabaseAdmin
-    .from('tasks')
+    .from('ideas')
     .delete()
     .eq('id', id)
     .eq('user_id', userId);

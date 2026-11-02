@@ -1,10 +1,10 @@
-export type TaskStatus =
+export type IdeaStatus =
   | 'planned'
   | 'in_progress'
   | 'feature_request'
   | 'completed';
 
-export const TASK_STATUSES: TaskStatus[] = [
+export const IDEA_STATUSES: IdeaStatus[] = [
   'planned',
   'in_progress',
   'feature_request',
@@ -52,13 +52,13 @@ export interface NoteSummary {
   updated_at: string;
 }
 
-export interface TaskRow {
+export interface IdeaRow {
   id: number;
   user_id: string;
   title: string;
   description: RichTextDoc;
   description_text: string;
-  status: TaskStatus;
+  status: IdeaStatus;
   position: number;
   created_at: string;
   updated_at: string;

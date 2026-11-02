@@ -4,7 +4,7 @@ import { config } from './config.js';
 import { requireAuth } from './middleware/auth.js';
 import { errorHandler, notFoundHandler } from './lib/http.js';
 import { notesRouter } from './routes/notes.js';
-import { tasksRouter } from './routes/tasks.js';
+import { ideasRouter } from './routes/ideas.js';
 import { profileRouter } from './routes/profile.js';
 
 const app = express();
@@ -37,7 +37,7 @@ app.get('/health', (_req, res) => {
 app.use('/api', requireAuth);
 app.use('/api/profile', profileRouter);
 app.use('/api/notes', notesRouter);
-app.use('/api/tasks', tasksRouter);
+app.use('/api/ideas', ideasRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
